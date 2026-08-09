@@ -1,0 +1,4105 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<?xml-stylesheet type="text/xsl" href="#stylesheet" ?>
+<!DOCTYPE doc [
+  <!ELEMENT xsl:stylesheet (#PCDATA)>
+  <!ATTLIST xsl:stylesheet id ID #REQUIRED>
+]>
+<doc>
+
+<!-- STYLESHEET -->
+<xsl:stylesheet id="stylesheet" version="1.0" xmlns:xsl="http://www.w3.org/1999/XSL/Transform" >
+    <!-- HTML5 doctype -->
+    <xsl:output method="html" indent="yes" encoding="UTF-8" doctype-system="about:legacy-compat" />
+
+    <!-- ignore space text nodes -->
+    <xsl:strip-space elements="*"/>
+
+    <!-- do nothing for this stylesheet -->
+    <xsl:template match="xsl:stylesheet" />
+
+    <!-- make root node base HTML -->
+    <xsl:template match="/doc/base"> 
+        <html>
+            <head>
+                <title>wwiser dump</title>
+                <style>
+html { overflow-y: scroll; }
+body { font-family: monospace; font-size: 16px; white-space: nowrap; }
+
+/* fields */
+.object, .list, .field, .skip, .error { margin-left: 45px; }
+
+.head { display: flex;  align-items: center; }
+.head > .attr { _margin-right:10px; _display:inline-block; margin: 0; padding: 0; _outline: 1px solid red;}
+.head > .attr.type { min-width:45px; color:#0074D9; }
+.head > .attr.name { min-width:350px; color:#FF4136; }
+.head > .attr.value { color:#3D9970; }
+.head > .attr.hashname,
+.head > .attr.guidname,
+.head > .attr.objpath,
+.head > .attr.path { color:#800080; _color:#9932CC; margin-left:10px; }
+
+.list > .head > .attr { color:#B10DC9; }
+.object > .head > .attr.name { width:auto; }
+.object > .head > .attr.type,
+.object > .head > .attr.name { color:#85144b; }
+
+.index { color:#777; font-size:12px; }
+.skip { color: #777; } 
+.error { color:red; font-weight: bold; }
+.error:before { content: '**'; }
+
+.offset { color: #aaa; position: absolute; left: 10px; }
+.content { margin-left:80px; }
+
+/* simple */
+.simple .head > .attr.type { display:none; }
+.simple .offset { display:none; }
+
+/* links */
+.target {
+    display:inline-block; width:0px; height:0px; min-width:0px;max-width:0px; min-height:0px;max-height:0px; vertical-align: center;
+    margin-left:6px;text-indent:16px; overflow: hidden;
+    background-color: transparent;  border-radius:1px; width: 0; height: 0; border-left: 6px solid transparent; border-right: 6px solid transparent; border-bottom: 10px solid cadetblue;
+}
+.anchor {
+    display:inline-block; width:10px; height:10px; min-width:10px;max-width:10px; min-height:10px;max-height:10px; vertical-align: center;
+    margin-left:6px; text-indent:16px; overflow: hidden;
+    background-color: #87b6b8; border-radius:6px;
+}
+
+/* toggler */
+.closable > .head { cursor:pointer; margin-left: -25px; padding-left: 25px; }
+.closable > .head:before {
+    content:'-'; position:absolute; font-weight: bold; margin-top:2px; margin-left: -25px; color:666; 
+    width:20px; line-height:12px; text-align:center; display:inline-block; background-color:#eee; border-radius:3px; vertical-align: bottom;
+}
+.closable.hidden > .head:before { content:'+'; }
+.closable > .head > .attr { cursor:auto; }
+.closable.hidden > .body { display:none; }
+
+/* tooltips */
+.tooltip {
+    position: relative;
+    display: inline-block;
+    background-color:#800080;
+    width: 10px; height: 10px; margin-left:2px;
+}
+.tooltip.objpath { }
+.tooltip.path { border-radius: 6px; }
+
+.tooltip > .attr {
+    display:none; position: absolute; top: -5px; right: 100%;
+    border-radius: 5px; padding: 1px; background-color: #eee; color:#800080
+}
+.tooltip:hover .attr {
+    display:block;
+}
+
+/* page */
+.tools {
+    border: 1px solid #ccc;
+    border-radius: 5px;
+    padding: 10px;
+    margin-bottom: 30px;
+}
+.view.hide-offset .offset {
+    display:none;
+}
+.view.hide-type .attr.type {
+    display:none;
+}
+
+                </style>
+            </head>
+            <body>
+                <div class="view" id="view">
+                    <div class="tools">
+                        Hide:
+                        <label><input type="checkbox" class="hide" value="hide-offset"/>Offset</label>
+                        <label><input type="checkbox" class="hide" value="hide-type"/>Type</label>
+                    </div>
+                    <div class="content">
+                        <xsl:apply-templates />
+                    </div>
+                </div>
+
+                <script>
+<xsl:text disable-output-escaping="yes">
+<![CDATA[
+(function() {
+    let main = document.getElementById('view');
+    document.addEventListener('click', function(e) {
+        if (!e.target)
+            return;
+
+        if (e.target.matches('.closable > .head')) {
+            e.target.parentNode.classList.toggle('hidden');
+            return;
+        }
+        if (e.target.matches('.hide')) {
+            main.classList.toggle(e.target.value);
+            return;
+        }
+    }, false);
+
+    // test option to middle-click on a wem and open it, browser support is kinda wonky
+    /*
+    let NEW_VERSION = 62;
+    let version = null;
+    function get_version() {
+        if (version)
+            return version;
+
+        let root_obj = document.querySelector('.root > .head > name');
+        if (!root_obj)
+            return null;
+        version = int(root_obj.textContent.substring(1));
+        return version;
+    }
+
+    function get_ext(source_obj) {
+        let version = get_version();
+        if (version >= NEW_VERSION )
+            return '.wem';
+
+        let plugin_fld = source_obj.querySelector('.head > .value');
+        if (plugin_fld.textContent.includes('[VORBIS]'))
+            return '.ogg';
+        if (plugin_fld.textContent.includes('[XMA]'))
+            return '.xma';
+        return '.wav'
+    }
+
+    document.addEventListener('auxclick', function(event) {
+        if (event.button != 1)
+            return;
+
+        let elem = event.target;
+        if (!elem.matches('a.target'))
+            return;
+
+        event.preventDefault();
+
+        let media_obj = elem.closest('.object'); //AkMediaInformation
+        if (!media_obj)
+            return;
+
+        let obj_name = media_obj.querySelector('.head > .name');
+        if (!obj_name.textContent.includes('AkMediaInformation'))
+            return;
+        let is_stream = false;
+        let source_obj = media_obj.parentElement.closest('.object');
+        let type_fld = media_obj.previousElementSibling;
+        if (type_fld) {
+            let type_value = type_fld.querySelector('.value');
+            is_stream = type_value.textContent.includes('[Streaming]');
+        }
+
+        let elem_id = elem.href.substring(elem.href.lastIndexOf('#') + 1);
+
+        if (is_stream) {
+            let filename = elem_id + get_ext(source_obj);
+            window.open(filename);
+            //window.open('file://' + filename);
+        }
+        else {
+            //would need to detect subsong N + pass TXTP to browser
+        }
+    })
+    */
+
+})();
+]]>
+</xsl:text>
+                </script>
+            </body>
+        </html>
+    </xsl:template>
+
+    <xsl:template match="root">
+        <div class="root closable">
+            <div class="head">
+                <span class="attr type">bank</span>
+                <span class="attr name">v<xsl:value-of select="@version"/></span>
+                <span class="attr value"><xsl:value-of select="@filename"/></span>
+                <!--<span class="attr value">(<xsl:value-of select="@path"/></span>-->
+            </div>
+            <div class="body">
+                <xsl:apply-templates />
+            </div>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="object|obj">
+        <div class="object closable">
+            <div class="head">
+                <span class="attr type">obj</span>
+                <span class="attr name">
+                    <xsl:value-of select="@name|@na"/>
+                    <xsl:if test="@index|@ix">
+                        <span class="index">[<xsl:value-of select="@index|@ix"/>]</span>
+                    </xsl:if>
+                </span>
+            </div>
+            <div class="body">
+                <xsl:apply-templates />
+            </div>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="list|lst">
+        <!--<xsl:if test="count(*)>0">-->
+        <div class="list closable">
+            <div class="head">
+                <span class="attr type">list</span>
+                <span class="attr name"><xsl:value-of select="@name|@na"/></span>
+                <span class="attr value"><xsl:value-of select="@count|@co"/></span>
+            </div>
+            <div class="body">
+                <xsl:apply-templates />
+            </div>
+        </div>
+        <!--</xsl:if>-->
+    </xsl:template>
+
+    <xsl:template match="field|fld">
+        <div class="field">
+            <xsl:if test="@offset|@of">
+            <div class="offset">
+                <xsl:value-of select="@offset|@of"/>
+            </div>
+            </xsl:if>
+            <div class="head">
+                <span class="attr type"><xsl:value-of select="@type|@ty"/></span>
+                <span class="attr name"><xsl:value-of select="@name|@na"/></span>
+                <span class="attr value">
+                <xsl:choose>
+                    <xsl:when test="@valuefmt|@vf"><xsl:value-of select="@valuefmt|@vf"/></xsl:when>
+                    <xsl:otherwise><xsl:value-of select="@value|@va"/></xsl:otherwise>
+                </xsl:choose>
+                </span>
+                <!--clickable links need text nodes, but not anchors-->
+                <xsl:if test="(@type='tid' or @ty='tid')and (@value!=0 or @va!=0) and (@value!=-1 or @va!=-1)"><a class="target" href="#{@value|@va}">target</a></xsl:if>
+                <xsl:if test="@type='sid' or @ty='sid'"><a class="anchor" id="{@value|@va}" href="#{@value|@va}">anchor</a></xsl:if>
+
+                <xsl:if test="@hashname|@hn">
+                    <span class="attr hashname">(<xsl:value-of select="@hashname|@hn"/>)</span>
+                </xsl:if>
+                <xsl:if test="@guidname|@gn">
+                    <span class="attr guidname">{<xsl:value-of select="@guidname|@gn"/>}</span>
+                </xsl:if>
+                <xsl:if test="@objpath|@op">
+                    <span class="tooltip objpath"><span class="attr objpath"><xsl:value-of select="@objpath|@op"/></span></span>
+                </xsl:if>
+                <xsl:if test="@path|@pa">
+                    <span class="tooltip path"><span class="attr path"><xsl:value-of select="@path|@pa"/></span></span>
+                </xsl:if>
+            </div>
+            <xsl:if test="*">
+            <div class="body">
+                <xsl:apply-templates />
+            </div>
+            </xsl:if>
+        </div>
+    </xsl:template>
+
+    <xsl:template match="skip">
+        <div class="skip">
+            (skipped <xsl:value-of select="@size|@si"/>)
+            <xsl:apply-templates />
+        </div>
+    </xsl:template>
+
+    <xsl:template match="error">
+        <div class="error">
+            error: <xsl:value-of select="@message|@me"/>
+            <xsl:apply-templates />
+        </div>
+    </xsl:template>
+
+</xsl:stylesheet>
+
+<!-- XML -->
+<base>
+<root filename="aeg920_005.bnk" pa="E:\a\fromsoftware\ELDEN RING\game\sd" version="135">
+	<obj na="BankHeader">
+		<fld ty="4cc" na="dwTag" va="b&apos;BKHD&apos;" vf="b&apos;BKHD&apos; [Bank Header]"/>
+		<fld ty="u32" na="dwChunkSize" va="28" vf="0x1C"/>
+		<obj na="AkBankHeader">
+			<fld ty="u32" na="dwBankGeneratorVersion" va="135"/>
+			<fld ty="sid" na="dwSoundBankID" va="1608839797" hn="aeg920_005"/>
+			<fld ty="sid" na="dwLanguageID" va="393239870" hn="SFX"/>
+			<fld ty="u32" na="uAltValues" va="16" vf="0x10">
+				<fld ty="bit0" na="uAlignment" va="16" vf="16"/>
+				<fld ty="bit16" na="bDeviceAllocated" va="0" vf="0"/>
+			</fld>
+			<fld ty="u32" na="dwProjectID" va="1906"/>
+			<fld ty="gap" na="padding" va="8" vf="0x08"/>
+		</obj>
+	</obj>
+	<obj na="MediaIndex">
+		<fld ty="4cc" na="dwTag" va="b&apos;DIDX&apos;" vf="b&apos;DIDX&apos; [Media Index]"/>
+		<fld ty="u32" na="dwChunkSize" va="108" vf="0x6C"/>
+		<lst na="pLoadedMedia" co="9">
+			<obj na="MediaHeader" ix="0">
+				<fld ty="sid" na="id" va="14519199"/>
+				<fld ty="u32" na="uOffset" va="0" vf="0x00"/>
+				<fld ty="u32" na="uSize" va="7835" vf="0x1E9B"/>
+			</obj>
+			<obj na="MediaHeader" ix="1">
+				<fld ty="sid" na="id" va="105016763"/>
+				<fld ty="u32" na="uOffset" va="7840" vf="0x1EA0"/>
+				<fld ty="u32" na="uSize" va="9322" vf="0x246A"/>
+			</obj>
+			<obj na="MediaHeader" ix="2">
+				<fld ty="sid" na="id" va="164570941"/>
+				<fld ty="u32" na="uOffset" va="17168" vf="0x4310"/>
+				<fld ty="u32" na="uSize" va="122747" vf="0x1DF7B"/>
+			</obj>
+			<obj na="MediaHeader" ix="3">
+				<fld ty="sid" na="id" va="189065485"/>
+				<fld ty="u32" na="uOffset" va="139920" vf="0x22290"/>
+				<fld ty="u32" na="uSize" va="260264" vf="0x3F8A8"/>
+			</obj>
+			<obj na="MediaHeader" ix="4">
+				<fld ty="sid" na="id" va="476475909"/>
+				<fld ty="u32" na="uOffset" va="400192" vf="0x61B40"/>
+				<fld ty="u32" na="uSize" va="109067" vf="0x1AA0B"/>
+			</obj>
+			<obj na="MediaHeader" ix="5">
+				<fld ty="sid" na="id" va="619051946"/>
+				<fld ty="u32" na="uOffset" va="509264" vf="0x7C550"/>
+				<fld ty="u32" na="uSize" va="31247" vf="0x7A0F"/>
+			</obj>
+			<obj na="MediaHeader" ix="6">
+				<fld ty="sid" na="id" va="627753016"/>
+				<fld ty="u32" na="uOffset" va="540512" vf="0x83F60"/>
+				<fld ty="u32" na="uSize" va="26835" vf="0x68D3"/>
+			</obj>
+			<obj na="MediaHeader" ix="7">
+				<fld ty="sid" na="id" va="642586414"/>
+				<fld ty="u32" na="uOffset" va="567360" vf="0x8A840"/>
+				<fld ty="u32" na="uSize" va="33744" vf="0x83D0"/>
+			</obj>
+			<obj na="MediaHeader" ix="8">
+				<fld ty="sid" na="id" va="863713338"/>
+				<fld ty="u32" na="uOffset" va="601104" vf="0x92C10"/>
+				<fld ty="u32" na="uSize" va="29199" vf="0x720F"/>
+			</obj>
+		</lst>
+	</obj>
+	<obj na="DataChunk">
+		<fld ty="4cc" na="dwTag" va="b&apos;DATA&apos;" vf="b&apos;DATA&apos; [Data]"/>
+		<fld ty="u32" na="dwChunkSize" va="630303" vf="0x99E1F"/>
+		<fld ty="gap" na="pData" va="630303" vf="0x99E1F"/>
+	</obj>
+	<obj na="HircChunk">
+		<fld ty="4cc" na="dwTag" va="b&apos;HIRC&apos;" vf="b&apos;HIRC&apos; [Hierarchy]"/>
+		<fld ty="u32" na="dwChunkSize" va="3492" vf="0xDA4"/>
+		<fld ty="u32" na="NumReleasableHircItem" va="54"/>
+		<lst na="listLoadedItem" co="54">
+			<obj na="CAkAttenuation" ix="0">
+				<fld ty="u8" na="eHircType" va="14" vf="0x0E [Attenuation]"/>
+				<fld ty="u32" na="dwSectionSize" va="222" vf="0xDE"/>
+				<fld ty="sid" na="ulID" va="486461388"/>
+				<obj na="AttenuationInitialValues">
+					<fld ty="u8" na="bIsConeEnabled" va="0" vf="0x00"/>
+					<fld ty="s8" na="curveToUse[0]" va="0"/>
+					<fld ty="s8" na="curveToUse[1]" va="1"/>
+					<fld ty="s8" na="curveToUse[2]" va="2"/>
+					<fld ty="s8" na="curveToUse[3]" va="3"/>
+					<fld ty="s8" na="curveToUse[4]" va="-1"/>
+					<fld ty="s8" na="curveToUse[5]" va="4"/>
+					<fld ty="s8" na="curveToUse[6]" va="-1"/>
+					<fld ty="u8" na="NumCurves" va="5" vf="0x05"/>
+					<lst na="curves" co="5">
+						<obj na="CAkConversionTable" ix="0">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="1">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="2"/>
+							<lst na="pRTPCMgr" co="2">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="2">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="3">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="26.25"/>
+									<fld ty="f32" na="To" va="30.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="35.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="4">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="5"/>
+							<lst na="pRTPCMgr" co="5">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="81.30187225341797"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="14.522500038146973"/>
+									<fld ty="f32" na="To" va="68.22940063476562"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="19.610309600830078"/>
+									<fld ty="f32" na="To" va="50.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="3">
+									<fld ty="f32" na="From" va="24.698129653930664"/>
+									<fld ty="f32" na="To" va="8.774539947509766"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="4">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+					</lst>
+					<obj na="InitialRTPC">
+						<fld ty="u16" na="ulNumRTPC" va="0"/>
+						<lst na="pRTPCMgr" co="0"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkAttenuation" ix="1">
+				<fld ty="u8" na="eHircType" va="14" vf="0x0E [Attenuation]"/>
+				<fld ty="u32" na="dwSectionSize" va="222" vf="0xDE"/>
+				<fld ty="sid" na="ulID" va="738185994"/>
+				<obj na="AttenuationInitialValues">
+					<fld ty="u8" na="bIsConeEnabled" va="0" vf="0x00"/>
+					<fld ty="s8" na="curveToUse[0]" va="0"/>
+					<fld ty="s8" na="curveToUse[1]" va="1"/>
+					<fld ty="s8" na="curveToUse[2]" va="2"/>
+					<fld ty="s8" na="curveToUse[3]" va="3"/>
+					<fld ty="s8" na="curveToUse[4]" va="-1"/>
+					<fld ty="s8" na="curveToUse[5]" va="4"/>
+					<fld ty="s8" na="curveToUse[6]" va="-1"/>
+					<fld ty="u8" na="NumCurves" va="5" vf="0x05"/>
+					<lst na="curves" co="5">
+						<obj na="CAkConversionTable" ix="0">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="1">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="2"/>
+							<lst na="pRTPCMgr" co="2">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="2">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="3">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="26.25"/>
+									<fld ty="f32" na="To" va="30.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="35.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="4">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="5"/>
+							<lst na="pRTPCMgr" co="5">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="81.30187225341797"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="14.522500038146973"/>
+									<fld ty="f32" na="To" va="68.22940063476562"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="19.610309600830078"/>
+									<fld ty="f32" na="To" va="50.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="3">
+									<fld ty="f32" na="From" va="24.698129653930664"/>
+									<fld ty="f32" na="To" va="8.774539947509766"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="4">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+					</lst>
+					<obj na="InitialRTPC">
+						<fld ty="u16" na="ulNumRTPC" va="0"/>
+						<lst na="pRTPCMgr" co="0"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkAttenuation" ix="2">
+				<fld ty="u8" na="eHircType" va="14" vf="0x0E [Attenuation]"/>
+				<fld ty="u32" na="dwSectionSize" va="159" vf="0x9F"/>
+				<fld ty="sid" na="ulID" va="845742150"/>
+				<obj na="AttenuationInitialValues">
+					<fld ty="u8" na="bIsConeEnabled" va="0" vf="0x00"/>
+					<fld ty="s8" na="curveToUse[0]" va="0"/>
+					<fld ty="s8" na="curveToUse[1]" va="1"/>
+					<fld ty="s8" na="curveToUse[2]" va="0"/>
+					<fld ty="s8" na="curveToUse[3]" va="2"/>
+					<fld ty="s8" na="curveToUse[4]" va="3"/>
+					<fld ty="s8" na="curveToUse[5]" va="-1"/>
+					<fld ty="s8" na="curveToUse[6]" va="-1"/>
+					<fld ty="u8" na="NumCurves" va="4" vf="0x04"/>
+					<lst na="curves" co="4">
+						<obj na="CAkConversionTable" ix="0">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="1">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="2"/>
+							<lst na="pRTPCMgr" co="2">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="2">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="26.25"/>
+									<fld ty="f32" na="To" va="30.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="35.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="3">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="26.25"/>
+									<fld ty="f32" na="To" va="25.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="33.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+					</lst>
+					<obj na="InitialRTPC">
+						<fld ty="u16" na="ulNumRTPC" va="0"/>
+						<lst na="pRTPCMgr" co="0"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkAttenuation" ix="3">
+				<fld ty="u8" na="eHircType" va="14" vf="0x0E [Attenuation]"/>
+				<fld ty="u32" na="dwSectionSize" va="198" vf="0xC6"/>
+				<fld ty="sid" na="ulID" va="989265416"/>
+				<obj na="AttenuationInitialValues">
+					<fld ty="u8" na="bIsConeEnabled" va="0" vf="0x00"/>
+					<fld ty="s8" na="curveToUse[0]" va="0"/>
+					<fld ty="s8" na="curveToUse[1]" va="1"/>
+					<fld ty="s8" na="curveToUse[2]" va="0"/>
+					<fld ty="s8" na="curveToUse[3]" va="2"/>
+					<fld ty="s8" na="curveToUse[4]" va="3"/>
+					<fld ty="s8" na="curveToUse[5]" va="4"/>
+					<fld ty="s8" na="curveToUse[6]" va="-1"/>
+					<fld ty="u8" na="NumCurves" va="5" vf="0x05"/>
+					<lst na="curves" co="5">
+						<obj na="CAkConversionTable" ix="0">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="0" vf="0x00 [Log3]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="1">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="2"/>
+							<lst na="pRTPCMgr" co="2">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.4988127648830414"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="2">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="20.0"/>
+									<fld ty="f32" na="To" va="35.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="38.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="3">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="2"/>
+							<lst na="pRTPCMgr" co="2">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="33.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="4">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="4"/>
+							<lst na="pRTPCMgr" co="4">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="75.2623291015625"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="15.315589904785156"/>
+									<fld ty="f32" na="To" va="69.56558227539062"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="24.244550704956055"/>
+									<fld ty="f32" na="To" va="12.234829902648926"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="3">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+					</lst>
+					<obj na="InitialRTPC">
+						<fld ty="u16" na="ulNumRTPC" va="0"/>
+						<lst na="pRTPCMgr" co="0"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkAttenuation" ix="4">
+				<fld ty="u8" na="eHircType" va="14" vf="0x0E [Attenuation]"/>
+				<fld ty="u32" na="dwSectionSize" va="222" vf="0xDE"/>
+				<fld ty="sid" na="ulID" va="1044054971"/>
+				<obj na="AttenuationInitialValues">
+					<fld ty="u8" na="bIsConeEnabled" va="0" vf="0x00"/>
+					<fld ty="s8" na="curveToUse[0]" va="0"/>
+					<fld ty="s8" na="curveToUse[1]" va="1"/>
+					<fld ty="s8" na="curveToUse[2]" va="2"/>
+					<fld ty="s8" na="curveToUse[3]" va="3"/>
+					<fld ty="s8" na="curveToUse[4]" va="-1"/>
+					<fld ty="s8" na="curveToUse[5]" va="4"/>
+					<fld ty="s8" na="curveToUse[6]" va="-1"/>
+					<fld ty="u8" na="NumCurves" va="5" vf="0x05"/>
+					<lst na="curves" co="5">
+						<obj na="CAkConversionTable" ix="0">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="1">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="2"/>
+							<lst na="pRTPCMgr" co="2">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="2">
+							<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="-0.2920542061328888"/>
+									<fld ty="u32" na="Interp" va="2" vf="0x02 [Log1]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="35.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="-1.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="3">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="26.25"/>
+									<fld ty="f32" na="To" va="30.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="35.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+						<obj na="CAkConversionTable" ix="4">
+							<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+							<fld ty="u16" na="ulSize" va="5"/>
+							<lst na="pRTPCMgr" co="5">
+								<obj na="AkRTPCGraphPoint" ix="0">
+									<fld ty="f32" na="From" va="0.0"/>
+									<fld ty="f32" na="To" va="81.30187225341797"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="1">
+									<fld ty="f32" na="From" va="14.522500038146973"/>
+									<fld ty="f32" na="To" va="68.22940063476562"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="2">
+									<fld ty="f32" na="From" va="19.610309600830078"/>
+									<fld ty="f32" na="To" va="50.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="3">
+									<fld ty="f32" na="From" va="24.698129653930664"/>
+									<fld ty="f32" na="To" va="8.774539947509766"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+								<obj na="AkRTPCGraphPoint" ix="4">
+									<fld ty="f32" na="From" va="45.0"/>
+									<fld ty="f32" na="To" va="0.0"/>
+									<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+								</obj>
+							</lst>
+						</obj>
+					</lst>
+					<obj na="InitialRTPC">
+						<fld ty="u16" na="ulNumRTPC" va="0"/>
+						<lst na="pRTPCMgr" co="0"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="5">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="63" vf="0x3F"/>
+				<fld ty="sid" na="ulID" va="217268485"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="642586414"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="33744" vf="0x83D0"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="556755519"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="4" vf="0x04 [HPF]"/>
+										<fld ty="uni" na="pValue" va="25.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="59" vf="0x3B [InitialDelay]"/>
+										<fld ty="uni" na="pValue" va="0.4000000059604645"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="6">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="68" vf="0x44"/>
+				<fld ty="sid" na="ulID" va="908772523"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="619051946"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="31247" vf="0x7A0F"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="556755519"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="4"/>
+								<lst na="pProps" co="4">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="-2.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="2" vf="0x02 [Pitch]"/>
+										<fld ty="uni" na="pValue" va="-400.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="3" vf="0x03 [LPF]"/>
+										<fld ty="uni" na="pValue" va="20.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="3">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkLayerCntr" ix="7">
+				<fld ty="u8" na="eHircType" va="9" vf="0x09 [Layer Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="51" vf="0x33"/>
+				<fld ty="sid" na="ulID" va="556755519"/>
+				<obj na="LayerCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="17061264"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="2"/>
+						<fld ty="tid" na="ulChildID" va="217268485"/>
+						<fld ty="tid" na="ulChildID" va="908772523"/>
+					</obj>
+					<fld ty="u32" na="ulNumLayers" va="0"/>
+					<lst na="pLayers" co="0"/>
+					<fld ty="u8" na="bIsContinuousValidation" va="0" vf="0x00"/>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="8">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="87" vf="0x57"/>
+				<fld ty="sid" na="ulID" va="17061264"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="2"/>
+								<lst na="pProps" co="2">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="14" vf="0x0E [CenterPCT]"/>
+										<fld ty="uni" na="pValue" va="50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="70" vf="0x46 [AttenuationID]"/>
+										<fld ty="tid" na="pValue" va="1044054971"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="3" vf="0x03">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="1"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="1"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+							<fld ty="u8" na="uBits3d" va="9" vf="0x09">
+								<fld ty="bit0" na="eSpatializationMode" va="1" vf="1 [PositionOnly]"/>
+								<fld ty="bit3" na="bEnableAttenuation" va="1"/>
+								<fld ty="bit4" na="bHoldEmitterPosAndOrient" va="0"/>
+								<fld ty="bit5" na="bHoldListenerOrient" va="0"/>
+								<fld ty="bit6" na="bEnableDiffraction" va="0"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="556755519"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="556755519"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="9">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="58" vf="0x3A"/>
+				<fld ty="sid" na="ulID" va="638311356"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="627753016"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="26835" vf="0x68D3"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="128536076"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="2"/>
+								<lst na="pProps" co="2">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="2" vf="0x02 [Pitch]"/>
+										<fld ty="uni" na="pValue" va="-730.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="10">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="81" vf="0x51"/>
+				<fld ty="sid" na="ulID" va="128536076"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="1"/>
+								<lst na="pProps" co="1">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="5.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="638311356"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="638311356"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="11">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="63" vf="0x3F"/>
+				<fld ty="sid" na="ulID" va="934951344"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="14519199"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="7835" vf="0x1E9B"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="305606117"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="2" vf="0x02 [Pitch]"/>
+										<fld ty="uni" na="pValue" va="-50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="3" vf="0x03 [LPF]"/>
+										<fld ty="uni" na="pValue" va="15.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="12">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="86" vf="0x56"/>
+				<fld ty="sid" na="ulID" va="305606117"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="2"/>
+								<lst na="pProps" co="2">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="2" vf="0x02 [Pitch]"/>
+										<fld ty="uni" na="pValue" va="-350.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="3" vf="0x03 [LPF]"/>
+										<fld ty="uni" na="pValue" va="10.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="934951344"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="934951344"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="13">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="58" vf="0x3A"/>
+				<fld ty="sid" na="ulID" va="431536466"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="476475909"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="109067" vf="0x1AA0B"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="704949014"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="2"/>
+								<lst na="pProps" co="2">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="58" vf="0x3A [Loop]"/>
+										<fld ty="uni" na="pValue" va="0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkLayerCntr" ix="14">
+				<fld ty="u8" na="eHircType" va="9" vf="0x09 [Layer Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="52" vf="0x34"/>
+				<fld ty="sid" na="ulID" va="704949014"/>
+				<obj na="LayerCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="419308341"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="1"/>
+								<lst na="pProps" co="1">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="431536466"/>
+					</obj>
+					<fld ty="u32" na="ulNumLayers" va="0"/>
+					<lst na="pLayers" co="0"/>
+					<fld ty="u8" na="bIsContinuousValidation" va="0" vf="0x00"/>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="15">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="92" vf="0x5C"/>
+				<fld ty="sid" na="ulID" va="419308341"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="-5.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="14" vf="0x0E [CenterPCT]"/>
+										<fld ty="uni" na="pValue" va="50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="70" vf="0x46 [AttenuationID]"/>
+										<fld ty="tid" na="pValue" va="486461388"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="3" vf="0x03">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="1"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="1"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+							<fld ty="u8" na="uBits3d" va="9" vf="0x09">
+								<fld ty="bit0" na="eSpatializationMode" va="1" vf="1 [PositionOnly]"/>
+								<fld ty="bit3" na="bEnableAttenuation" va="1"/>
+								<fld ty="bit4" na="bHoldEmitterPosAndOrient" va="0"/>
+								<fld ty="bit5" na="bHoldListenerOrient" va="0"/>
+								<fld ty="bit6" na="bEnableDiffraction" va="0"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="704949014"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="704949014"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="16">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="63" vf="0x3F"/>
+				<fld ty="sid" na="ulID" va="173658719"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="164570941"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="122747" vf="0x1DF7B"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="53354670"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="4" vf="0x04 [HPF]"/>
+										<fld ty="uni" na="pValue" va="15.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="58" vf="0x3A [Loop]"/>
+										<fld ty="uni" na="pValue" va="0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="17">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="79" vf="0x4F"/>
+				<fld ty="sid" na="ulID" va="725746236"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="189065485"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="260264" vf="0x3F8A8"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="53354670"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="6"/>
+								<lst na="pProps" co="6">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="4" vf="0x04 [HPF]"/>
+										<fld ty="uni" na="pValue" va="10.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="6" vf="0x06 [MakeUpGain]"/>
+										<fld ty="uni" na="pValue" va="5.099999904632568"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="14" vf="0x0E [CenterPCT]"/>
+										<fld ty="uni" na="pValue" va="50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="3">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="4">
+										<fld ty="u8" na="pID" va="58" vf="0x3A [Loop]"/>
+										<fld ty="uni" na="pValue" va="0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="5">
+										<fld ty="u8" na="pID" va="70" vf="0x46 [AttenuationID]"/>
+										<fld ty="tid" na="pValue" va="989265416"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="3" vf="0x03">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="1"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="1"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+							<fld ty="u8" na="uBits3d" va="10" vf="0x0A">
+								<fld ty="bit0" na="eSpatializationMode" va="2" vf="2 [PositionAndOrientation]"/>
+								<fld ty="bit3" na="bEnableAttenuation" va="1"/>
+								<fld ty="bit4" na="bHoldEmitterPosAndOrient" va="0"/>
+								<fld ty="bit5" na="bHoldListenerOrient" va="0"/>
+								<fld ty="bit6" na="bEnableDiffraction" va="0"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkLayerCntr" ix="18">
+				<fld ty="u8" na="eHircType" va="9" vf="0x09 [Layer Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="216" vf="0xD8"/>
+				<fld ty="sid" na="ulID" va="53354670"/>
+				<obj na="LayerCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="759647222"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="2"/>
+						<fld ty="tid" na="ulChildID" va="173658719"/>
+						<fld ty="tid" na="ulChildID" va="725746236"/>
+					</obj>
+					<fld ty="u32" na="ulNumLayers" va="1"/>
+					<lst na="pLayers" co="1">
+						<obj na="CAkLayer" ix="0">
+							<fld ty="tid" na="ulLayerID" va="797555599"/>
+							<obj na="LayerInitialValues">
+								<obj na="InitialRTPC">
+									<fld ty="u16" na="ulNumRTPC" va="1"/>
+									<lst na="pRTPCMgr" co="1">
+										<obj na="RTPC" ix="0">
+											<fld ty="tid" na="RTPCID" va="2203407867"/>
+											<fld ty="u8" na="rtpcType" va="0" vf="0x00 [GameParameter]"/>
+											<fld ty="u8" na="rtpcAccum" va="2" vf="0x02 [Additive]"/>
+											<fld ty="var" na="ParamID" va="3" vf="0x03 [LPF]"/>
+											<fld ty="sid" na="rtpcCurveID" va="421046506"/>
+											<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+											<fld ty="u16" na="ulSize" va="4"/>
+											<lst na="pRTPCMgr" co="4">
+												<obj na="AkRTPCGraphPoint" ix="0">
+													<fld ty="f32" na="From" va="0.0"/>
+													<fld ty="f32" na="To" va="35.0"/>
+													<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+												</obj>
+												<obj na="AkRTPCGraphPoint" ix="1">
+													<fld ty="f32" na="From" va="100.0"/>
+													<fld ty="f32" na="To" va="35.0"/>
+													<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+												</obj>
+												<obj na="AkRTPCGraphPoint" ix="2">
+													<fld ty="f32" na="From" va="125.0"/>
+													<fld ty="f32" na="To" va="0.0"/>
+													<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+												</obj>
+												<obj na="AkRTPCGraphPoint" ix="3">
+													<fld ty="f32" na="From" va="256.0"/>
+													<fld ty="f32" na="To" va="0.0"/>
+													<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+												</obj>
+											</lst>
+										</obj>
+									</lst>
+								</obj>
+								<fld ty="tid" na="rtpcID" va="2203407867"/>
+								<fld ty="u8" na="rtpcType" va="0" vf="0x00 [GameParameter]"/>
+								<fld ty="u32" na="ulNumAssoc" va="2"/>
+								<lst na="assocs" co="2">
+									<obj na="CAssociatedChildData" ix="0">
+										<fld ty="tid" na="ulAssociatedChildID" va="173658719"/>
+										<fld ty="u32" na="ulCurveSize" va="3"/>
+										<lst na="pRTPCMgr" co="3">
+											<obj na="AkRTPCGraphPoint" ix="0">
+												<fld ty="f32" na="From" va="0.0"/>
+												<fld ty="f32" na="To" va="1.0"/>
+												<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+											</obj>
+											<obj na="AkRTPCGraphPoint" ix="1">
+												<fld ty="f32" na="From" va="115.96316528320312"/>
+												<fld ty="f32" na="To" va="1.0"/>
+												<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+											</obj>
+											<obj na="AkRTPCGraphPoint" ix="2">
+												<fld ty="f32" na="From" va="136.05322265625"/>
+												<fld ty="f32" na="To" va="0.0"/>
+												<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+											</obj>
+										</lst>
+									</obj>
+									<obj na="CAssociatedChildData" ix="1">
+										<fld ty="tid" na="ulAssociatedChildID" va="725746236"/>
+										<fld ty="u32" na="ulCurveSize" va="3"/>
+										<lst na="pRTPCMgr" co="3">
+											<obj na="AkRTPCGraphPoint" ix="0">
+												<fld ty="f32" na="From" va="115.96316528320312"/>
+												<fld ty="f32" na="To" va="0.0"/>
+												<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+											</obj>
+											<obj na="AkRTPCGraphPoint" ix="1">
+												<fld ty="f32" na="From" va="136.05322265625"/>
+												<fld ty="f32" na="To" va="1.0"/>
+												<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+											</obj>
+											<obj na="AkRTPCGraphPoint" ix="2">
+												<fld ty="f32" na="From" va="256.0"/>
+												<fld ty="f32" na="To" va="1.0"/>
+												<fld ty="u32" na="Interp" va="5" vf="0x05 [SCurve]"/>
+											</obj>
+										</lst>
+									</obj>
+								</lst>
+							</obj>
+						</obj>
+					</lst>
+					<fld ty="u8" na="bIsContinuousValidation" va="0" vf="0x00"/>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="19">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="92" vf="0x5C"/>
+				<fld ty="sid" na="ulID" va="759647222"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="1" vf="0x01"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="8.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="14" vf="0x0E [CenterPCT]"/>
+										<fld ty="uni" na="pValue" va="50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="70" vf="0x46 [AttenuationID]"/>
+										<fld ty="tid" na="pValue" va="989265416"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="3" vf="0x03">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="1"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="1"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+							<fld ty="u8" na="uBits3d" va="10" vf="0x0A">
+								<fld ty="bit0" na="eSpatializationMode" va="2" vf="2 [PositionAndOrientation]"/>
+								<fld ty="bit3" na="bEnableAttenuation" va="1"/>
+								<fld ty="bit4" na="bHoldEmitterPosAndOrient" va="0"/>
+								<fld ty="bit5" na="bHoldListenerOrient" va="0"/>
+								<fld ty="bit6" na="bEnableDiffraction" va="0"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="53354670"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="53354670"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="20">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="63" vf="0x3F"/>
+				<fld ty="sid" na="ulID" va="726806483"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="105016763"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="9322" vf="0x246A"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="980287441"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="2.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="3" vf="0x03 [LPF]"/>
+										<fld ty="uni" na="pValue" va="15.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="21">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="81" vf="0x51"/>
+				<fld ty="sid" na="ulID" va="980287441"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="1"/>
+								<lst na="pProps" co="1">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="3" vf="0x03 [LPF]"/>
+										<fld ty="uni" na="pValue" va="10.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="726806483"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="726806483"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkSound" ix="22">
+				<fld ty="u8" na="eHircType" va="2" vf="0x02 [Sound]"/>
+				<fld ty="u32" na="dwSectionSize" va="68" vf="0x44"/>
+				<fld ty="sid" na="ulID" va="243306453"/>
+				<obj na="SoundInitialValues">
+					<obj na="AkBankSourceData">
+						<fld ty="u32" na="ulPluginID" va="262145" vf="0x00040001 [VORBIS]">
+							<fld ty="u16" na="type" va="1" vf="0x01 [Codec]"/>
+							<fld ty="u16" na="company" va="0" vf="0x00 [Audiokinetic]"/>
+						</fld>
+						<fld ty="u8" na="StreamType" va="0" vf="0x00 [Data/bnk]"/>
+						<obj na="AkMediaInformation">
+							<fld ty="tid" na="sourceID" va="863713338"/>
+							<fld ty="u32" na="uInMemoryMediaSize" va="29199" vf="0x720F"/>
+							<fld ty="u8" na="uSourceBits" va="0" vf="0x00">
+								<fld ty="bit0" na="bIsLanguageSpecific" va="0"/>
+								<fld ty="bit1" na="bPrefetch" va="0"/>
+								<fld ty="bit3" na="bNonCachable" va="0"/>
+								<fld ty="bit7" na="bHasSource" va="0"/>
+							</fld>
+						</obj>
+					</obj>
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="982974484"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="4"/>
+								<lst na="pProps" co="4">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="2" vf="0x02 [Pitch]"/>
+										<fld ty="uni" na="pValue" va="-180.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="3" vf="0x03 [LPF]"/>
+										<fld ty="uni" na="pValue" va="20.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="3">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkRanSeqCntr" ix="23">
+				<fld ty="u8" na="eHircType" va="5" vf="0x05 [Random/Sequence Container]"/>
+				<fld ty="u32" na="dwSectionSize" va="92" vf="0x5C"/>
+				<fld ty="sid" na="ulID" va="982974484"/>
+				<obj na="RanSeqCntrInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="0"/>
+						<fld ty="tid" na="DirectParentID" va="427063521"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="3"/>
+								<lst na="pProps" co="3">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="0" vf="0x00 [Volume]"/>
+										<fld ty="uni" na="pValue" va="5.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="14" vf="0x0E [CenterPCT]"/>
+										<fld ty="uni" na="pValue" va="50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="70" vf="0x46 [AttenuationID]"/>
+										<fld ty="tid" na="pValue" va="738185994"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="3" vf="0x03">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="1"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="1"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+							<fld ty="u8" na="uBits3d" va="9" vf="0x09">
+								<fld ty="bit0" na="eSpatializationMode" va="1" vf="1 [PositionOnly]"/>
+								<fld ty="bit3" na="bEnableAttenuation" va="1"/>
+								<fld ty="bit4" na="bHoldEmitterPosAndOrient" va="0"/>
+								<fld ty="bit5" na="bHoldListenerOrient" va="0"/>
+								<fld ty="bit6" na="bEnableDiffraction" va="0"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="0" vf="0x00 [ContinueToPlay]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<fld ty="u16" na="sLoopCount" va="1"/>
+					<fld ty="u16" na="sLoopModMin" va="0"/>
+					<fld ty="u16" na="sLoopModMax" va="0"/>
+					<fld ty="f32" na="fTransitionTime" va="1000.0"/>
+					<fld ty="f32" na="fTransitionTimeModMin" va="0.0"/>
+					<fld ty="f32" na="fTransitionTimeModMax" va="0.0"/>
+					<fld ty="u16" na="wAvoidRepeatCount" va="1"/>
+					<fld ty="u8" na="eTransitionMode" va="0" vf="0x00 [Disabled]"/>
+					<fld ty="u8" na="eRandomMode" va="0" vf="0x00 [Normal]"/>
+					<fld ty="u8" na="eMode" va="0" vf="0x00 [Random]"/>
+					<fld ty="u8" na="byBitVector" va="18" vf="0x12">
+						<fld ty="bit0" na="_bIsUsingWeight" va="0"/>
+						<fld ty="bit1" na="bResetPlayListAtEachPlay" va="1"/>
+						<fld ty="bit2" na="bIsRestartBackward" va="0"/>
+						<fld ty="bit3" na="bIsContinuous" va="0"/>
+						<fld ty="bit4" na="bIsGlobal" va="1"/>
+					</fld>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="243306453"/>
+					</obj>
+					<obj na="CAkPlayList">
+						<fld ty="u16" na="ulPlayListItem" va="1"/>
+						<lst na="pItems" co="1">
+							<obj na="AkPlaylistItem" ix="0">
+								<fld ty="tid" na="ulPlayID" va="243306453"/>
+								<fld ty="s32" na="weight" va="50000"/>
+							</obj>
+						</lst>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkActorMixer" ix="24">
+				<fld ty="u8" na="eHircType" va="7" vf="0x07 [Actor-Mixer]"/>
+				<fld ty="u32" na="dwSectionSize" va="71" vf="0x47"/>
+				<fld ty="sid" na="ulID" va="427063521"/>
+				<obj na="ActorMixerInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="2623632643"/>
+						<fld ty="tid" na="DirectParentID" va="877906112"/>
+						<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="0"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="1"/>
+								<lst na="pProps" co="1">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="0" vf="0x00">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="0"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="0"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="0"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="0"/>
+							<lst na="pRTPCMgr" co="0"/>
+						</obj>
+					</obj>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="7"/>
+						<fld ty="tid" na="ulChildID" va="17061264"/>
+						<fld ty="tid" na="ulChildID" va="128536076"/>
+						<fld ty="tid" na="ulChildID" va="305606117"/>
+						<fld ty="tid" na="ulChildID" va="419308341"/>
+						<fld ty="tid" na="ulChildID" va="759647222"/>
+						<fld ty="tid" na="ulChildID" va="980287441"/>
+						<fld ty="tid" na="ulChildID" va="982974484"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkActorMixer" ix="25">
+				<fld ty="u8" na="eHircType" va="7" vf="0x07 [Actor-Mixer]"/>
+				<fld ty="u32" na="dwSectionSize" va="237" vf="0xED"/>
+				<fld ty="sid" na="ulID" va="877906112"/>
+				<obj na="ActorMixerInitialValues">
+					<obj na="NodeBaseParams">
+						<obj na="NodeInitialFxParams">
+							<fld ty="u8" na="bIsOverrideParentFX" va="0" vf="0x00"/>
+							<fld ty="u8" na="uNumFx" va="0"/>
+						</obj>
+						<fld ty="u8" na="bOverrideAttachmentParams" va="0" vf="0x00"/>
+						<fld ty="tid" na="OverrideBusId" va="2623632643"/>
+						<fld ty="tid" na="DirectParentID" va="0"/>
+						<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+							<fld ty="bit0" na="bPriorityOverrideParent" va="0"/>
+							<fld ty="bit1" na="bPriorityApplyDistFactor" va="1"/>
+							<fld ty="bit2" na="bOverrideMidiEventsBehavior" va="0"/>
+							<fld ty="bit3" na="bOverrideMidiNoteTracking" va="0"/>
+							<fld ty="bit4" na="bEnableMidiNoteTracking" va="0"/>
+							<fld ty="bit5" na="bIsMidiBreakLoopOnNoteOff" va="0"/>
+						</fld>
+						<obj na="NodeInitialParams">
+							<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+								<fld ty="u8" na="cProps" va="4"/>
+								<lst na="pProps" co="4">
+									<obj na="AkPropBundle" ix="0">
+										<fld ty="u8" na="pID" va="8" vf="0x08 [PriorityDistanceOffset]"/>
+										<fld ty="uni" na="pValue" va="-49.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="1">
+										<fld ty="u8" na="pID" va="14" vf="0x0E [CenterPCT]"/>
+										<fld ty="uni" na="pValue" va="50.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="2">
+										<fld ty="u8" na="pID" va="23" vf="0x17 [GameAuxSendVolume]"/>
+										<fld ty="uni" na="pValue" va="-6.0"/>
+									</obj>
+									<obj na="AkPropBundle" ix="3">
+										<fld ty="u8" na="pID" va="70" vf="0x46 [AttenuationID]"/>
+										<fld ty="tid" na="pValue" va="845742150"/>
+									</obj>
+								</lst>
+							</obj>
+							<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+								<fld ty="u8" na="cProps" va="0"/>
+								<lst na="pProps" co="0"/>
+							</obj>
+						</obj>
+						<obj na="PositioningParams">
+							<fld ty="u8" na="uBitsPositioning" va="3" vf="0x03">
+								<fld ty="bit0" na="bPositioningInfoOverrideParent" va="1"/>
+								<fld ty="bit1" na="bHasListenerRelativeRouting" va="1"/>
+								<fld ty="bit2" na="ePannerType" va="0" vf="0 [DirectSpeakerAssignment]"/>
+								<fld ty="bit5" na="e3DPositionType" va="0" vf="0 [Emitter]"/>
+							</fld>
+							<fld ty="u8" na="uBits3d" va="9" vf="0x09">
+								<fld ty="bit0" na="eSpatializationMode" va="1" vf="1 [PositionOnly]"/>
+								<fld ty="bit3" na="bEnableAttenuation" va="1"/>
+								<fld ty="bit4" na="bHoldEmitterPosAndOrient" va="0"/>
+								<fld ty="bit5" na="bHoldListenerOrient" va="0"/>
+								<fld ty="bit6" na="bEnableDiffraction" va="0"/>
+							</fld>
+						</obj>
+						<obj na="AuxParams">
+							<fld ty="u8" na="byBitVector" va="2" vf="0x02">
+								<fld ty="bit2" na="bOverrideUserAuxSends" va="0"/>
+								<fld ty="bit3" na="bHasAux" va="0"/>
+								<fld ty="bit4" na="bOverrideReflectionsAuxBus" va="0"/>
+							</fld>
+							<fld ty="tid" na="reflectionsAuxBus" va="0"/>
+						</obj>
+						<obj na="AdvSettingsParams">
+							<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+								<fld ty="bit0" na="bKillNewest" va="0"/>
+								<fld ty="bit1" na="bUseVirtualBehavior" va="0"/>
+								<fld ty="bit3" na="bIgnoreParentMaxNumInst" va="0"/>
+								<fld ty="bit4" na="bIsVVoicesOptOverrideParent" va="0"/>
+							</fld>
+							<fld ty="u8" na="eVirtualQueueBehavior" va="1" vf="0x01 [FromElapsedTime]"/>
+							<fld ty="u16" na="u16MaxNumInstance" va="50"/>
+							<fld ty="u8" na="eBelowThresholdBehavior" va="3" vf="0x03 [KillIfOneShotElseVirtual]"/>
+							<fld ty="u8" na="byBitVector" va="0" vf="0x00">
+								<fld ty="bit0" na="bOverrideHdrEnvelope" va="0"/>
+								<fld ty="bit1" na="bOverrideAnalysis" va="0"/>
+								<fld ty="bit2" na="bNormalizeLoudness" va="0"/>
+								<fld ty="bit3" na="bEnableEnvelope" va="0"/>
+							</fld>
+						</obj>
+						<obj na="StateChunk">
+							<fld ty="var" na="ulNumStateProps" va="0"/>
+							<lst na="stateProps" co="0"/>
+							<fld ty="var" na="ulNumStateGroups" va="0"/>
+							<lst na="pStateChunks" co="0"/>
+						</obj>
+						<obj na="InitialRTPC">
+							<fld ty="u16" na="ulNumRTPC" va="3"/>
+							<lst na="pRTPCMgr" co="3">
+								<obj na="RTPC" ix="0">
+									<fld ty="tid" na="RTPCID" va="1240670792" hn="distance"/>
+									<fld ty="u8" na="rtpcType" va="0" vf="0x00 [GameParameter]"/>
+									<fld ty="u8" na="rtpcAccum" va="2" vf="0x02 [Additive]"/>
+									<fld ty="var" na="ParamID" va="56" vf="0x38 [GameAuxSendLPF]"/>
+									<fld ty="sid" na="rtpcCurveID" va="82193127"/>
+									<fld ty="u8" na="eScaling" va="0" vf="0x00 [None]"/>
+									<fld ty="u16" na="ulSize" va="3"/>
+									<lst na="pRTPCMgr" co="3">
+										<obj na="AkRTPCGraphPoint" ix="0">
+											<fld ty="f32" na="From" va="0.0"/>
+											<fld ty="f32" na="To" va="0.0"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="1">
+											<fld ty="f32" na="From" va="20.89126968383789"/>
+											<fld ty="f32" na="To" va="9.0"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="2">
+											<fld ty="f32" na="From" va="100.0"/>
+											<fld ty="f32" na="To" va="35.0"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+									</lst>
+								</obj>
+								<obj na="RTPC" ix="1">
+									<fld ty="tid" na="RTPCID" va="1437246667" hn="azimuth"/>
+									<fld ty="u8" na="rtpcType" va="0" vf="0x00 [GameParameter]"/>
+									<fld ty="u8" na="rtpcAccum" va="2" vf="0x02 [Additive]"/>
+									<fld ty="var" na="ParamID" va="43" vf="0x2B [OutputBusVolume]"/>
+									<fld ty="sid" na="rtpcCurveID" va="943972427"/>
+									<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+									<fld ty="u16" na="ulSize" va="5"/>
+									<lst na="pRTPCMgr" co="5">
+										<obj na="AkRTPCGraphPoint" ix="0">
+											<fld ty="f32" na="From" va="-180.0"/>
+											<fld ty="f32" na="To" va="-0.4988127648830414"/>
+											<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="1">
+											<fld ty="f32" na="From" va="-90.0"/>
+											<fld ty="f32" na="To" va="-0.4988127648830414"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="2">
+											<fld ty="f32" na="From" va="0.0"/>
+											<fld ty="f32" na="To" va="0.0"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="3">
+											<fld ty="f32" na="From" va="90.0"/>
+											<fld ty="f32" na="To" va="-0.4988127648830414"/>
+											<fld ty="u32" na="Interp" va="9" vf="0x09 [Constant]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="4">
+											<fld ty="f32" na="From" va="180.0"/>
+											<fld ty="f32" na="To" va="-0.4988127648830414"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+									</lst>
+								</obj>
+								<obj na="RTPC" ix="2">
+									<fld ty="tid" na="RTPCID" va="830115334"/>
+									<fld ty="u8" na="rtpcType" va="0" vf="0x00 [GameParameter]"/>
+									<fld ty="u8" na="rtpcAccum" va="2" vf="0x02 [Additive]"/>
+									<fld ty="var" na="ParamID" va="43" vf="0x2B [OutputBusVolume]"/>
+									<fld ty="sid" na="rtpcCurveID" va="505598802"/>
+									<fld ty="u8" na="eScaling" va="2" vf="0x02 [dB]"/>
+									<fld ty="u16" na="ulSize" va="3"/>
+									<lst na="pRTPCMgr" co="3">
+										<obj na="AkRTPCGraphPoint" ix="0">
+											<fld ty="f32" na="From" va="-90.0"/>
+											<fld ty="f32" na="To" va="-0.7488113641738892"/>
+											<fld ty="u32" na="Interp" va="7" vf="0x07 [SineRecip]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="1">
+											<fld ty="f32" na="From" va="0.0"/>
+											<fld ty="f32" na="To" va="0.0"/>
+											<fld ty="u32" na="Interp" va="1" vf="0x01 [Sine]"/>
+										</obj>
+										<obj na="AkRTPCGraphPoint" ix="2">
+											<fld ty="f32" na="From" va="90.0"/>
+											<fld ty="f32" na="To" va="-0.7488113641738892"/>
+											<fld ty="u32" na="Interp" va="4" vf="0x04 [Linear]"/>
+										</obj>
+									</lst>
+								</obj>
+							</lst>
+						</obj>
+					</obj>
+					<obj na="Children">
+						<fld ty="u32" na="ulNumChilds" va="1"/>
+						<fld ty="tid" na="ulChildID" va="427063521"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="26">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="362225314"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="17061264"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="27">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236352"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="362225314"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="28">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="663647924"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="419308341"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="29">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236353"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="663647924"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="30">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="738925701"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="982974484"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="31">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236354"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="738925701"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="32">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="329110625"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="980287441"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="33">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236355"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="329110625"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="34">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="980788616"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="128536076"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="35">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236357"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="980788616"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="36">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="660071848"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="759647222"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="37">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236358"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="660071848"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionPlay" ix="38">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="18" vf="0x12"/>
+				<fld ty="sid" na="ulID" va="289950084"/>
+				<fld ty="u16" na="ulActionType" va="1027" vf="0x0403 [Play]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="305606117"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="PlayActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<fld ty="tid" na="bankID" va="1608839797" hn="aeg920_005"/>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="39">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1081236359"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="289950084"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="40">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="16" vf="0x10"/>
+				<fld ty="sid" na="ulID" va="705964513"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="982974484"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="41">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172536"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="705964513"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="42">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="16" vf="0x10"/>
+				<fld ty="sid" na="ulID" va="400838013"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="980287441"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="43">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172537"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="400838013"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="44">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="21" vf="0x15"/>
+				<fld ty="sid" na="ulID" va="290297404"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="17061264"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="1"/>
+						<lst na="pProps" co="1">
+							<obj na="AkPropBundle" ix="0">
+								<fld ty="u8" na="pID" va="16" vf="0x10 [TransitionTime]"/>
+								<fld ty="uni" na="pValue" va="1000"/>
+							</obj>
+						</lst>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="45">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172538"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="290297404"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="46">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="16" vf="0x10"/>
+				<fld ty="sid" na="ulID" va="887872382"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="419308341"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="47">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172539"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="887872382"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="48">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="21" vf="0x15"/>
+				<fld ty="sid" na="ulID" va="764714069"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="759647222"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="1"/>
+						<lst na="pProps" co="1">
+							<obj na="AkPropBundle" ix="0">
+								<fld ty="u8" na="pID" va="16" vf="0x10 [TransitionTime]"/>
+								<fld ty="uni" na="pValue" va="1000"/>
+							</obj>
+						</lst>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="49">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172540"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="764714069"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="50">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="16" vf="0x10"/>
+				<fld ty="sid" na="ulID" va="467299626"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="305606117"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="51">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172541"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="467299626"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+			<obj na="CAkActionStop" ix="52">
+				<fld ty="u8" na="eHircType" va="3" vf="0x03 [Action]"/>
+				<fld ty="u32" na="dwSectionSize" va="16" vf="0x10"/>
+				<fld ty="sid" na="ulID" va="862594456"/>
+				<fld ty="u16" na="ulActionType" va="259" vf="0x0103 [Stop_E_O]"/>
+				<obj na="ActionInitialValues">
+					<fld ty="tid" na="idExt" va="128536076"/>
+					<fld ty="u8" na="idExt_4" va="0" vf="0x00">
+						<fld ty="bit0" na="bIsBus" va="0"/>
+					</fld>
+					<obj na="AkPropBundle&lt;AkPropValue,unsigned char&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="AkPropBundle&lt;RANGED_MODIFIERS&lt;AkPropValue&gt;&gt;">
+						<fld ty="u8" na="cProps" va="0"/>
+						<lst na="pProps" co="0"/>
+					</obj>
+					<obj na="ActiveActionParams">
+						<fld ty="u8" na="byBitVector" va="4" vf="0x04">
+							<fld ty="bit0" na="eFadeCurve" va="4" vf="4 [Linear]"/>
+						</fld>
+						<obj na="StopActionSpecificParams">
+							<fld ty="u8" na="byBitVector" va="6" vf="0x06">
+								<fld ty="bit1" na="bApplyToStateTransitions" va="1"/>
+								<fld ty="bit2" na="bApplyToDynamicSequence" va="1"/>
+							</fld>
+						</obj>
+						<obj na="ExceptParams">
+							<fld ty="var" na="ulExceptionListSize" va="0"/>
+							<lst na="listElementException" co="0"/>
+						</obj>
+					</obj>
+				</obj>
+			</obj>
+			<obj na="CAkEvent" ix="53">
+				<fld ty="u8" na="eHircType" va="4" vf="0x04 [Event]"/>
+				<fld ty="u32" na="dwSectionSize" va="9" vf="0x09"/>
+				<fld ty="sid" na="ulID" va="1794172543"/>
+				<obj na="EventInitialValues">
+					<fld ty="var" na="ulActionListSize" va="1"/>
+					<lst na="actions" co="1">
+						<obj na="Action" ix="0">
+							<fld ty="tid" na="ulActionID" va="862594456"/>
+						</obj>
+					</lst>
+				</obj>
+			</obj>
+		</lst>
+	</obj>
+</root>
+</base>
+
+</doc>
